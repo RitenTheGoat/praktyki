@@ -64,7 +64,7 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const pb = new PocketBase('http://192.168.0.147:8090');
+      const pb = new PocketBase('http://192.168.2.9:8080');
 
       // Register in "users" collection
       await pb.collection('users').create({
@@ -75,7 +75,8 @@ export default function RegisterPage() {
         emailVisibility: true,
         imie: formData.imie,
         nazwisko: formData.nazwisko,
-        gatunek: selectedGenres.join(', ')
+        gatunek: selectedGenres.join(', '),
+        rola: 'user' // Automatyczne ustawienie roli na 'user'
       });
 
       // Auto-login after registration

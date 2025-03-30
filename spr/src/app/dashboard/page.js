@@ -37,6 +37,12 @@ export default function Dashboard() {
   });
   const [addStock, setAddStock] = useState(0);
   const [favorites, setFavorites] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [newReview, setNewReview] = useState({
+    tresc: '',
+    ocena: 0
+  });
+  const [editingReview, setEditingReview] = useState(null);
 
   const isAdmin = () => {
     return userRole === 'admin' || userRole === 'sadmin';
@@ -66,7 +72,6 @@ export default function Dashboard() {
       const records = await pb.collection('ksiazki').getFullList();
       setBooks(records);
     } catch (err) {
-    
     } finally {
       setLoading(false);
     }
@@ -77,6 +82,18 @@ export default function Dashboard() {
       const records = await pb.collection('kupione').getFullList();
       setPurchases(records);
     } catch (err) {
+    }
+  };
+
+  const fetchReviews = async (bookId) => {
+    try {
+      const records = await pb.collection('recenzje').getFullList({
+        filter: `id_book="${bookId}"`,
+        expand: 'id_user'
+      });
+      setReviews(records);
+    } catch (err) {
+      console.error('Failed to fetch reviews:', err);
     }
   };
 
@@ -199,6 +216,7 @@ export default function Dashboard() {
     });
     setEditMode(false);
     setAddStock(0);
+    fetchReviews(book.id);
   };
 
   const handleQuantityChange = (e) => {
@@ -311,6 +329,112 @@ export default function Dashboard() {
     }
   };
 
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!newReview.tresc || !newReview.ocena) {
+      alert('Proszę wypełnić wszystkie pola recenzji');
+      return;
+    }
+
+    try {
+      const user = pb.authStore.model;
+      await pb.collection('recenzje').create({
+        id_book: selectedBook.id,
+        id_user: user.id,
+        tresc: newReview.tresc,
+        ocena: newReview.ocena,
+        report: false
+      });
+      
+      setNewReview({
+        tresc: '',
+        ocena: 0
+      });
+      fetchReviews(selectedBook.id);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to submit review:', err);
+      setError('Failed to submit review');
+    }
+  };
+
+  const handleEditReview = async (e) => {
+    e.preventDefault();
+    
+    if (!editingReview.tresc || !editingReview.ocena) {
+      setError('Proszę wypełnić wszystkie pola recenzji');
+      return;
+    }
+
+    try {
+      await pb.collection('recenzje').update(editingReview.id, {
+        tresc: editingReview.tresc,
+        ocena: editingReview.ocena
+      });
+      
+      setEditingReview(null);
+      fetchReviews(selectedBook.id);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to update review:', err);
+      setError('Failed to update review');
+    }
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    if (confirm('Czy na pewno chcesz usunąć tę recenzję?')) {
+      try {
+        await pb.collection('recenzje').delete(reviewId);
+        fetchReviews(selectedBook.id);
+      } catch (err) {
+        console.error('Failed to delete review:', err);
+        setError('Failed to delete review');
+      }
+    }
+  };
+
+  const handleReportReview = async (reviewId) => {
+    try {
+      await pb.collection('recenzje').update(reviewId, {
+        report: true
+      });
+      fetchReviews(selectedBook.id);
+    } catch (err) {
+      console.error('Failed to report review:', err);
+      setError('Failed to report review');
+    }
+  };
+
+  const handleUnreportReview = async (reviewId) => {
+    try {
+      await pb.collection('recenzje').update(reviewId, {
+        report: false
+      });
+      fetchReviews(selectedBook.id);
+    } catch (err) {
+      console.error('Failed to unreport review:', err);
+      setError('Failed to unreport review');
+    }
+  };
+
+  const renderStars = (rating, editable = false, onChange = null) => {
+    return (
+      <div className="flex">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type={editable ? "button" : undefined}
+            onClick={editable ? () => onChange(star) : undefined}
+            className={`text-xl ${star <= rating ? 'text-yellow-500' : 'text-gray-300'}`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+    );
+  };
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
@@ -334,194 +458,348 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       {selectedBook ? (
-        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-6">
-            <div className="flex justify-between items-start mb-4">
-              <button 
-                onClick={() => setSelectedBook(null)}
-                className="text-blue-500 hover:text-blue-700"
-              >
-                ← Wróć do listy
-              </button>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={() => toggleFavorite(selectedBook.id, selectedBook.tytul)}
-                  className={`text-2xl ${isFavorite(selectedBook.id) ? 'text-red-500' : 'text-gray-400'}`}
+        <div className="max-w-6xl mx-auto flex gap-6">
+          {/* Lewa kolumna - książka */}
+          <div className="w-1/2 bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <button 
+                  onClick={() => setSelectedBook(null)}
+                  className="text-blue-500 hover:text-blue-700"
                 >
-                  ♥
+                  ← Wróć do listy
                 </button>
-                {isAdmin() && (
-                  <>
-                    <button
-                      onClick={() => setEditMode(!editMode)}
-                      className="bg-yellow-500 text-white px-3 py-1 rounded text-sm"
-                    >
-                      {editMode ? 'Anuluj edycję' : 'Edytuj'}
-                    </button>
-                    <button
-                      onClick={handleDeleteBook}
-                      className="bg-red-500 text-white px-3 py-1 rounded text-sm"
-                    >
-                      Usuń
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            <div className="flex flex-col md:flex-row gap-6">
-              <div className="md:w-1/3">
-                {selectedBook.okladka && (
-                  <div className="bg-gray-200 flex items-center justify-center">
-                    <img 
-                      src={pb.getFileUrl(selectedBook, selectedBook.okladka, { thumb: '300x450' })} 
-                      alt={`Cover of ${selectedBook.tytul}`}
-                      className="h-full object-contain"
-                    />
-                  </div>
-                )}
-                {editMode && (
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium mb-1">Zmień okładkę</label>
-                    <input
-                      type="file"
-                      className="w-full p-2 border rounded"
-                      onChange={handleEditFileChange}
-                      accept="image/*"
-                    />
-                  </div>
-                )}
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => toggleFavorite(selectedBook.id, selectedBook.tytul)}
+                    className={`text-2xl ${isFavorite(selectedBook.id) ? 'text-red-500' : 'text-gray-400'}`}
+                  >
+                    ♥
+                  </button>
+                  {isAdmin() && (
+                    <>
+                      <button
+                        onClick={() => setEditMode(!editMode)}
+                        className="bg-yellow-500 text-white px-3 py-1 rounded text-sm"
+                      >
+                        {editMode ? 'Anuluj edycję' : 'Edytuj'}
+                      </button>
+                      <button
+                        onClick={handleDeleteBook}
+                        className="bg-red-500 text-white px-3 py-1 rounded text-sm"
+                      >
+                        Usuń
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               
-              <div className="md:w-2/3">
-                {editMode ? (
-                  <>
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium mb-1">Tytuł</label>
-                      <input
-                        type="text"
-                        className="w-full p-2 border rounded"
-                        value={editedBook.tytul}
-                        onChange={(e) => setEditedBook({...editedBook, tytul: e.target.value})}
+              <div className="flex flex-col gap-6">
+                <div className="flex justify-center">
+                  {selectedBook.okladka && (
+                    <div className="bg-gray-200 flex items-center justify-center w-64 h-96">
+                      <img 
+                        src={pb.getFileUrl(selectedBook, selectedBook.okladka, { thumb: '300x450' })} 
+                        alt={`Cover of ${selectedBook.tytul}`}
+                        className="h-full object-contain"
                       />
                     </div>
-                    
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium mb-1">Autor</label>
-                      <input
-                        type="text"
-                        className="w-full p-2 border rounded"
-                        value={editedBook.autor}
-                        onChange={(e) => setEditedBook({...editedBook, autor: e.target.value})}
-                      />
-                    </div>
-                    
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium mb-1">Opis</label>
-                      <textarea
-                        className="w-full p-2 border rounded"
-                        value={editedBook.opis}
-                        onChange={(e) => setEditedBook({...editedBook, opis: e.target.value})}
-                      />
-                    </div>
-                    
-                    <div className=" gap-4 mb-6">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Cena</label>
+                  )}
+                </div>
+                
+                <div>
+                  {editMode ? (
+                    <>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">Tytuł</label>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
                           className="w-full p-2 border rounded"
-                          value={editedBook.cena}
-                          onChange={(e) => setEditedBook({...editedBook, cena: e.target.value})}
+                          value={editedBook.tytul}
+                          onChange={(e) => setEditedBook({...editedBook, tytul: e.target.value})}
                         />
                       </div>
-                    </div>
-                    
-                    <button
-                      onClick={handleUpdateBook}
-                      className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 mb-4"
-                    >
-                      Zapisz zmiany
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <h1 className="text-2xl font-bold mb-2">{selectedBook.tytul || 'Untitled'}</h1>
-                    <p className="text-gray-600 mb-4">Autor: {selectedBook.autor || 'Unknown'}</p>
-                    
-                    <div className="mb-4">
-                      <h2 className="text-lg font-semibold mb-2">Opis</h2>
-                      <p>{selectedBook.opis || 'Brak opisu'}</p>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                      <div>
-                        <p className="text-gray-600">Cena (szt.)</p>
-                        <p className="font-medium">{selectedBook.cena ? `${selectedBook.cena} PLN` : '-'}</p>
+                      
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">Autor</label>
+                        <input
+                          type="text"
+                          className="w-full p-2 border rounded"
+                          value={editedBook.autor}
+                          onChange={(e) => setEditedBook({...editedBook, autor: e.target.value})}
+                        />
                       </div>
-                      <div>
-                        <p className="text-gray-600">Dostępna ilość</p>
-                        <p className="font-medium">{selectedBook.nastanie || '0'}</p>
+                      
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">Opis</label>
+                        <textarea
+                          className="w-full p-2 border rounded"
+                          value={editedBook.opis}
+                          onChange={(e) => setEditedBook({...editedBook, opis: e.target.value})}
+                        />
                       </div>
-                    </div>
-                  </>
-                )}
-                
-                {!editMode && isAdmin() && (
-                  <div className="mb-4 p-4 bg-gray-50 rounded">
-                    <h3 className="text-lg font-semibold mb-2">Dodaj do stanu magazynowego</h3>
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        min="1"
-                        className="flex-1 p-2 border rounded"
-                        value={addStock}
-                        onChange={(e) => setAddStock(Math.max(0, parseInt(e.target.value) || 0))}
-                        placeholder="Ilość do dodania"
-                      />
+                      
+                      <div className="grid  gap-4 mb-6">
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Cena</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-full p-2 border rounded"
+                            value={editedBook.cena}
+                            onChange={(e) => setEditedBook({...editedBook, cena: e.target.value})}
+                          />
+                        </div>
+                        
+                      </div>
+                      
                       <button
-                        onClick={handleAddStock}
-                        disabled={addStock <= 0}
-                        className={`px-4 py-2 rounded ${addStock <= 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 text-white'}`}
+                        onClick={handleUpdateBook}
+                        className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600"
                       >
-                        Dodaj
+                        Zapisz zmiany
                       </button>
-                    </div>
-                  </div>
-                )}
-                
-                {!editMode && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold mb-2">Kup książkę</h3>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <p className="text-gray-600">Ilość do kupienia</p>
+                    </>
+                  ) : (
+                    <>
+                      <h1 className="text-2xl font-bold mb-2">{selectedBook.tytul || 'Untitled'}</h1>
+                      <p className="text-gray-600 mb-4">Autor: {selectedBook.autor || 'Unknown'}</p>
+                      
+                      <div className="mb-4">
+                        <h2 className="text-lg font-semibold mb-2">Opis</h2>
+                        <p>{selectedBook.opis || 'Brak opisu'}</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                          <p className="text-gray-600">Cena (szt.)</p>
+                          <p className="font-medium">{selectedBook.cena ? `${selectedBook.cena} PLN` : '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600">Dostępna ilość</p>
+                          <p className="font-medium">{selectedBook.nastanie || '0'}</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  
+                  {!editMode && isAdmin() && (
+                    <div className="mb-4 p-4 bg-gray-50 rounded">
+                      <h3 className="text-lg font-semibold mb-2">Dodaj do stanu magazynowego</h3>
+                      <div className="flex gap-2">
                         <input
                           type="number"
                           min="1"
-                          max={selectedBook.nastanie}
-                          value={quantity}
-                          onChange={handleQuantityChange}
-                          className="w-full p-2 border rounded"
+                          className="flex-1 p-2 border rounded"
+                          value={addStock}
+                          onChange={(e) => setAddStock(Math.max(0, parseInt(e.target.value) || 0))}
+                          placeholder="Ilość do dodania"
                         />
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Suma</p>
-                        <p className="font-medium">{(selectedBook.cena * quantity).toFixed(2)} PLN</p>
+                        <button
+                          onClick={handleAddStock}
+                          disabled={addStock <= 0}
+                          className={`px-4 py-2 rounded ${addStock <= 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 text-white'}`}
+                        >
+                          Dodaj
+                        </button>
                       </div>
                     </div>
-                    
-                    <button
-                      onClick={handleBuy}
-                      disabled={selectedBook.nastanie <= 0}
-                      className={`w-full py-2 rounded ${selectedBook.nastanie <= 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 text-white'}`}
+                  )}
+                  
+                  {!editMode && (
+                    <div className="mb-6">
+                      <h3 className="text-lg font-semibold mb-2">Kup książkę</h3>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <p className="text-gray-600">Ilość do kupienia</p>
+                          <input
+                            type="number"
+                            min="1"
+                            max={selectedBook.nastanie}
+                            value={quantity}
+                            onChange={handleQuantityChange}
+                            className="w-full p-2 border rounded"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-gray-600">Suma</p>
+                          <p className="font-medium">{(selectedBook.cena * quantity).toFixed(2)} PLN</p>
+                        </div>
+                      </div>
+                      
+                      <button
+                        onClick={handleBuy}
+                        disabled={selectedBook.nastanie <= 0}
+                        className={`w-full py-2 rounded ${selectedBook.nastanie <= 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 text-white'}`}
+                      >
+                        {selectedBook.nastanie <= 0 ? 'Niedostępne' : 'Kup teraz'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Prawa kolumna - recenzje */}
+          <div className="w-1/2 bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-6">
+              <h3 className="text-xl font-bold mb-4">Recenzje</h3>
+              
+              {reviews.length > 0 ? (
+                <div className="space-y-4">
+                  {reviews.map(review => (
+                    <div 
+                      key={review.id} 
+                      className={`border-b pb-4 ${review.report ? 'bg-red-50 border-l-4 border-l-red-500 pl-3' : ''}`}
                     >
-                      {selectedBook.nastanie <= 0 ? 'Niedostępne' : 'Kup teraz'}
-                    </button>
+                      <div className="flex justify-between items-start">
+                        <p className="font-medium">
+                          {review.expand?.id_user?.email || 'Anonimowy użytkownik'}
+                          {review.report && (
+                            <span className="ml-2 text-red-500" title="Zgłoszona recenzja">
+                              ⚠️
+                            </span>
+                          )}
+                        </p>
+                        {editingReview?.id === review.id ? (
+                          renderStars(
+                            editingReview.ocena,
+                            true,
+                            (rating) => setEditingReview({...editingReview, ocena: rating})
+                          )
+                        ) : (
+                          renderStars(review.ocena)
+                        )}
+                      </div>
+                      <p className="mt-2 text-gray-700">
+                        {editingReview?.id === review.id ? (
+                          <textarea
+                            className="w-full p-2 border rounded"
+                            value={editingReview.tresc}
+                            onChange={(e) => setEditingReview({
+                              ...editingReview,
+                              tresc: e.target.value
+                            })}
+                          />
+                        ) : (
+                          review.tresc
+                        )}
+                      </p>
+                      
+                      <div className="flex justify-end gap-2 mt-2">
+                        {editingReview?.id === review.id ? (
+                          <>
+                            <button
+                              onClick={handleEditReview}
+                              className="text-sm bg-blue-500 text-white px-2 py-1 rounded"
+                            >
+                              Zapisz
+                            </button>
+                            <button
+                              onClick={() => setEditingReview(null)}
+                              className="text-sm bg-gray-500 text-white px-2 py-1 rounded"
+                            >
+                              Anuluj
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {review.id_user === pb.authStore.model?.id && (
+                              <>
+                                <button
+                                  onClick={() => setEditingReview({
+                                    id: review.id,
+                                    tresc: review.tresc,
+                                    ocena: review.ocena
+                                  })}
+                                  className="text-sm bg-yellow-500 text-white px-2 py-1 rounded"
+                                >
+                                  Edytuj
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteReview(review.id)}
+                                  className="text-sm bg-red-500 text-white px-2 py-1 rounded"
+                                >
+                                  Usuń
+                                </button>
+                              </>
+                            )}
+                            
+                            {(isAdmin() || userRole === 'sadmin') && review.id_user !== pb.authStore.model?.id && (
+                              <button
+                                onClick={() => handleDeleteReview(review.id)}
+                                className="text-sm bg-red-500 text-white px-2 py-1 rounded"
+                              >
+                                Usuń
+                              </button>
+                            )}
+                            
+                            {!isAdmin() && 
+                             userRole !== 'sadmin' && 
+                             review.id_user !== pb.authStore.model?.id && (
+                              <button
+                                onClick={() => review.report ? 
+                                  handleUnreportReview(review.id) : 
+                                  handleReportReview(review.id)}
+                                className={`text-sm px-2 py-1 rounded ${
+                                  review.report ? 
+                                  'bg-green-500 text-white' : 
+                                  'bg-gray-500 text-white'
+                                }`}
+                              >
+                                {review.report ? 'Cofnij zgłoszenie' : 'Zgłoś'}
+                              </button>
+                            )}
+                            
+                            {(isAdmin() || userRole === 'sadmin') && review.report && (
+                              <button
+                                onClick={() => handleUnreportReview(review.id)}
+                                className="text-sm bg-green-500 text-white px-2 py-1 rounded"
+                              >
+                                Oznacz jako sprawdzone
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">Brak recenzji dla tej książki</p>
+              )}
+
+              <div className="mt-6">
+                <h4 className="text-lg font-semibold mb-2">Dodaj swoją recenzję</h4>
+                <form onSubmit={handleReviewSubmit}>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">Ocena (1-5 gwiazdek)</label>
+                    {renderStars(
+                      newReview.ocena, 
+                      true, 
+                      (rating) => setNewReview({...newReview, ocena: rating})
+                    )}
                   </div>
-                )}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">Treść recenzji</label>
+                    <textarea
+                      className="w-full p-2 border rounded"
+                      rows="3"
+                      value={newReview.tresc}
+                      onChange={(e) => setNewReview({...newReview, tresc: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                  >
+                    Wyślij recenzję
+                  </button>
+                </form>
               </div>
             </div>
           </div>

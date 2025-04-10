@@ -47,6 +47,10 @@ export default function Dashboard() {
   const [genres, setGenres] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('');
+  const [showPurchaseNotification, setShowPurchaseNotification] = useState(false);
+  const [purchasedBookTitle, setPurchasedBookTitle] = useState('');
+  const [newGenreName, setNewGenreName] = useState('');
+  const [showAddGenreForm, setShowAddGenreForm] = useState(false);
 
   const isAdmin = () => {
     return user?.rola === 'admin' || user?.rola === 'sadmin';
@@ -294,6 +298,9 @@ export default function Dashboard() {
       ));
       fetchPurchases();
       setError(null);
+      
+      setPurchasedBookTitle(selectedBook.tytul);
+      setShowPurchaseNotification(true);
     } catch (err) {
       console.error('Błąd podczas zakupu:', err);
       setError('Nie udało się zrealizować zakupu');
@@ -364,6 +371,24 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Błąd podczas dodawania stanu magazynowego:', err);
       setError('Nie udało się dodać stanu magazynowego');
+    }
+  };
+
+  const handleAddNewGenre = async () => {
+    if (!newGenreName.trim()) return;
+    
+    try {
+      const newGenre = await pb.collection('gatunki').create({
+        nazwa: newGenreName.trim()
+      });
+      
+      setGenres([...genres, newGenre]);
+      setEditedBook({...editedBook, gateunek: newGenre.id});
+      setNewGenreName('');
+      setShowAddGenreForm(false);
+    } catch (err) {
+      console.error('Błąd podczas dodawania gatunku:', err);
+      setError('Nie udało się dodać nowego gatunku');
     }
   };
 
@@ -475,7 +500,6 @@ export default function Dashboard() {
   const filteredBooks = () => {
     let result = [...books];
     
-    // Filtrowanie po gatunku użytkownika (jeśli jest zdefiniowany)
     if (user?.gatunek) {
       result.sort((a, b) => {
         if (a.gateunek === user.gatunek && b.gateunek !== user.gatunek) return -1;
@@ -484,7 +508,6 @@ export default function Dashboard() {
       });
     }
     
-    // Filtrowanie po wyszukiwaniu
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(book => 
@@ -494,7 +517,6 @@ export default function Dashboard() {
       );
     }
     
-    // Filtrowanie po wybranym gatunku
     if (selectedGenre) {
       result = result.filter(book => book.gateunek === selectedGenre);
     }
@@ -524,9 +546,33 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
+      {showPurchaseNotification && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md animate-fade-in">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Zakup zakończony sukcesem!</h3>
+              <p className="text-gray-600 mb-6">Książka "{purchasedBookTitle}" została dodana do Twojej kolekcji.</p>
+              <button
+                onClick={() => {
+                  setShowPurchaseNotification(false);
+                  setSelectedBook(null);
+                }}
+                className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition-colors"
+              >
+                Wróć do strony głównej
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedBook ? (
         <div className="max-w-6xl mx-auto flex gap-6">
-          {/* Lewa kolumna - książka */}
           <div className="w-1/2 bg-white rounded-lg shadow-md overflow-hidden">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
@@ -601,16 +647,53 @@ export default function Dashboard() {
                       
                       <div className="mb-4">
                         <label className="block text-sm font-medium mb-1">Gatunek</label>
-                        <select
-                          className="w-full p-2 border rounded"
-                          value={editedBook.gateunek}
-                          onChange={(e) => setEditedBook({...editedBook, gateunek: e.target.value})}
-                        >
-                          <option value="">Wybierz gatunek</option>
-                          {genres.map(genre => (
-                            <option key={genre.id} value={genre.nazwa}>{genre.nazwa}</option>
-                          ))}
-                        </select>
+                        <div className="flex gap-2">
+                          <select
+                            className="flex-1 p-2 border rounded"
+                            value={editedBook.gateunek}
+                            onChange={(e) => setEditedBook({...editedBook, gateunek: e.target.value})}
+                          >
+                            <option value="">Wybierz gatunek</option>
+                            {genres.map(genre => (
+                              <option key={genre.id} value={genre.id}>{genre.nazwa}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddGenreForm(!showAddGenreForm)}
+                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-2 rounded"
+                          >
+                            +
+                          </button>
+                        </div>
+                        
+                        {showAddGenreForm && (
+                          <div className="mt-2 p-3 bg-gray-50 rounded">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                className="flex-1 p-2 border rounded"
+                                placeholder="Nazwa nowego gatunku"
+                                value={newGenreName}
+                                onChange={(e) => setNewGenreName(e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                onClick={handleAddNewGenre}
+                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded"
+                              >
+                                Dodaj
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setShowAddGenreForm(false)}
+                                className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-2 rounded"
+                              >
+                                Anuluj
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="mb-4">
@@ -660,7 +743,7 @@ export default function Dashboard() {
                       <h1 className="text-2xl font-bold mb-2">{selectedBook.tytul || 'Brak tytułu'}</h1>
                       <p className="text-gray-600 mb-4">Autor: {selectedBook.autor || 'Nieznany'}</p>
                       {selectedBook.gateunek && (
-                        <p className="text-gray-600 mb-4">Gatunek: {selectedBook.gateunek}</p>
+                        <p className="text-gray-600 mb-4">Gatunek: {genres.find(g => g.id === selectedBook.gateunek)?.nazwa || selectedBook.gateunek}</p>
                       )}
                       
                       <div className="mb-4">
@@ -739,7 +822,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Prawa kolumna - recenzje */}
           <div className="w-1/2 bg-white rounded-lg shadow-md overflow-hidden">
             <div className="p-4">
               <h3 className="text-xl font-bold mb-4">Recenzje</h3>
@@ -922,31 +1004,47 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Wyszukiwarka i filtry */}
-          <div className="mb-6 bg-white p-4 rounded-lg shadow-md">
+          <div className="mb-6 bg-white p-6 rounded-lg shadow-md">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
-                <label className="block text-sm font-medium mb-1">Wyszukaj książki</label>
-                <input
-                  type="text"
-                  className="w-full p-2 border rounded"
-                  placeholder="Wpisz tytuł, autora lub gatunek..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Wyszukaj książki..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="flex-1">
-                <label className="block text-sm font-medium mb-1">Filtruj po gatunku</label>
-                <select
-                  className="w-full p-2 border rounded"
-                  value={selectedGenre}
-                  onChange={(e) => setSelectedGenre(e.target.value)}
-                >
-                  <option value="">Wszystkie gatunki</option>
-                  {genres.map(genre => (
-                    <option key={genre.id} value={genre.nazwa}>{genre.nazwa}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                  <select
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                    value={selectedGenre}
+                    onChange={(e) => setSelectedGenre(e.target.value)}
+                  >
+                    <option value="">Wszystkie gatunki</option>
+                    {genres.map(genre => (
+                      <option key={genre.id} value={genre.id}>{genre.nazwa}</option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -975,7 +1073,7 @@ export default function Dashboard() {
                                 <h2 className="text-white font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
                                 <p className="text-gray-200 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
                                 {book.gateunek && (
-                                  <p className="text-gray-200 text-xs truncate">Gatunek: {book.gateunek}</p>
+                                  <p className="text-gray-200 text-xs truncate">Gatunek: {genres.find(g => g.id === book.gateunek)?.nazwa || book.gateunek}</p>
                                 )}
                               </div>
                             </div>
@@ -984,7 +1082,7 @@ export default function Dashboard() {
                               <h2 className="text-gray-800 font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
                               <p className="text-gray-600 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
                               {book.gateunek && (
-                                <p className="text-gray-600 text-xs truncate">Gatunek: {book.gateunek}</p>
+                                <p className="text-gray-600 text-xs truncate">Gatunek: {genres.find(g => g.id === book.gateunek)?.nazwa || book.gateunek}</p>
                               )}
                             </div>
                           )}
@@ -1034,7 +1132,7 @@ export default function Dashboard() {
                         <h2 className="text-white font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
                         <p className="text-gray-200 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
                         {book.gateunek && (
-                          <p className="text-gray-200 text-xs truncate">Gatunek: {book.gateunek}</p>
+                          <p className="text-gray-200 text-xs truncate">Gatunek: {genres.find(g => g.id === book.gateunek)?.nazwa || book.gateunek}</p>
                         )}
                       </div>
                     </div>
@@ -1043,7 +1141,7 @@ export default function Dashboard() {
                       <h2 className="text-gray-800 font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
                       <p className="text-gray-600 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
                       {book.gateunek && (
-                        <p className="text-gray-600 text-xs truncate">Gatunek: {book.gateunek}</p>
+                        <p className="text-gray-600 text-xs truncate">Gatunek: {genres.find(g => g.id === book.gateunek)?.nazwa || book.gateunek}</p>
                       )}
                     </div>
                   )}
@@ -1062,7 +1160,7 @@ export default function Dashboard() {
           </div>
 
           {showAddForm && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
               <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
                 <h2 className="text-xl font-bold mb-4">Dodaj nową książkę</h2>
                 
@@ -1096,7 +1194,7 @@ export default function Dashboard() {
                     >
                       <option value="">Wybierz gatunek</option>
                       {genres.map(genre => (
-                        <option key={genre.id} value={genre.nazwa}>{genre.nazwa}</option>
+                        <option key={genre.id} value={genre.id}>{genre.nazwa}</option>
                       ))}
                     </select>
                   </div>

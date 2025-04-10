@@ -1,29 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import PocketBase from 'pocketbase';
-import { FiUser, FiLock, FiMail, FiArrowRight, FiBook } from 'react-icons/fi';
-
-const bookGenres = [
-  'Fantastyka',
-  'Science Fiction',
-  'Kryminał',
-  'Thriller',
-  'Romans',
-  'Horror',
-  'Literatura piękna',
-  'Biografia',
-  'Historyczna',
-  'Dokumentalna',
-  'Przygodowa',
-  'Dla dzieci',
-  'Young Adult',
-  'Poradniki',
-  'Psychologia',
-  'Filozofia',
-  'Inne'
-];
+import { FiUser, FiLock, FiMail, FiArrowRight, FiBook, FiChevronDown } from 'react-icons/fi';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -34,10 +14,32 @@ export default function RegisterPage() {
     imie: '',
     nazwisko: ''
   });
+  const [bookGenres, setBookGenres] = useState([]);
   const [selectedGenres, setSelectedGenres] = useState([]);
+  const [isGenreSelectOpen, setIsGenreSelectOpen] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGenresLoading, setIsGenresLoading] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    const fetchGenres = async () => {
+      try {
+        const pb = new PocketBase('http://192.168.2.9:8080');
+        const genres = await pb.collection('gatunki').getFullList({
+          sort: 'nazwa',
+        });
+        setBookGenres(genres.map(genre => genre.nazwa));
+        setIsGenresLoading(false);
+      } catch (err) {
+        console.error('Error fetching genres:', err);
+        setError('Nie udało się załadować listy gatunków');
+        setIsGenresLoading(false);
+      }
+    };
+
+    fetchGenres();
+  }, []);
 
   const handleGenreChange = (genre) => {
     setSelectedGenres(prev => 
@@ -45,6 +47,10 @@ export default function RegisterPage() {
         ? prev.filter(g => g !== genre) 
         : [...prev, genre]
     );
+  };
+
+  const toggleGenreSelect = () => {
+    setIsGenreSelectOpen(!isGenreSelectOpen);
   };
 
   const handleSubmit = async (e) => {
@@ -221,25 +227,72 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Favorite Genres */}
+              {/* Favorite Genres - Dropdown Select */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 block">Ulubione gatunki</label>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {bookGenres.map((genre) => (
-                    <div key={genre} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id={`genre-${genre}`}
-                        checked={selectedGenres.includes(genre)}
-                        onChange={() => handleGenreChange(genre)}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor={`genre-${genre}`} className="ml-2 text-sm text-gray-700">
-                        {genre}
-                      </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={toggleGenreSelect}
+                    disabled={isGenresLoading}
+                    className={`w-full flex justify-between items-center pl-3 pr-4 py-2 text-left border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                      isGenresLoading ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    <span className="flex items-center">
+                      <FiBook className="text-gray-400 mr-2" />
+                      {isGenresLoading ? 'Ładowanie gatunków...' : 
+                       selectedGenres.length > 0 
+                        ? selectedGenres.join(', ') 
+                        : 'Wybierz gatunki...'}
+                    </span>
+                    {!isGenresLoading && (
+                      <FiChevronDown className={`text-gray-400 transition-transform ${isGenreSelectOpen ? 'transform rotate-180' : ''}`} />
+                    )}
+                  </button>
+                  
+                  {isGenreSelectOpen && !isGenresLoading && (
+                    <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-lg py-1 border border-gray-300 max-h-60 overflow-auto">
+                      {bookGenres.map((genre) => (
+                        <div 
+                          key={genre}
+                          className="px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center"
+                          onClick={() => handleGenreChange(genre)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedGenres.includes(genre)}
+                            readOnly
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-2 text-gray-700">{genre}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
+                {selectedGenres.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedGenres.map(genre => (
+                      <span 
+                        key={genre} 
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
+                      >
+                        {genre}
+                        <button
+                          type="button"
+                          onClick={() => handleGenreChange(genre)}
+                          className="ml-1.5 inline-flex text-indigo-400 hover:text-indigo-600 focus:outline-none"
+                        >
+                          <span className="sr-only">Usuń</span>
+                          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Submit Button */}

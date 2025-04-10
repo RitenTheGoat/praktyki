@@ -13,8 +13,7 @@ export default function Dashboard() {
   const [topBooks, setTopBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [userEmail, setUserEmail] = useState('');
-  const [userRole, setUserRole] = useState('');
+  const [user, setUser] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -24,7 +23,8 @@ export default function Dashboard() {
     okladka: null,
     nastanie: '',
     opis: '',
-    cena: ''
+    cena: '',
+    gateunek: ''
   });
   const [editMode, setEditMode] = useState(false);
   const [editedBook, setEditedBook] = useState({
@@ -33,7 +33,8 @@ export default function Dashboard() {
     okladka: null,
     nastanie: '',
     opis: '',
-    cena: ''
+    cena: '',
+    gateunek: ''
   });
   const [addStock, setAddStock] = useState(0);
   const [favorites, setFavorites] = useState([]);
@@ -43,9 +44,12 @@ export default function Dashboard() {
     ocena: 0
   });
   const [editingReview, setEditingReview] = useState(null);
+  const [genres, setGenres] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedGenre, setSelectedGenre] = useState('');
 
   const isAdmin = () => {
-    return userRole === 'admin' || userRole === 'sadmin';
+    return user?.rola === 'admin' || user?.rola === 'sadmin';
   };
 
   useEffect(() => {
@@ -54,26 +58,39 @@ export default function Dashboard() {
       return;
     }
 
-    const user = pb.authStore.model;
-    if (user?.email) {
-      setUserEmail(user.email);
-      setUserRole(user.rola);
-      fetchFavorites(user.email);
+    const currentUser = pb.authStore.model;
+    if (currentUser) {
+      setUser(currentUser);
+      fetchFavorites(currentUser.email);
     }
 
     fetchBooks();
     fetchPurchases();
+    fetchGenres();
   }, [router]);
 
   const fetchBooks = async () => {
     try {
       setLoading(true);
       setError(null);
-      const records = await pb.collection('ksiazki').getFullList();
+      const records = await pb.collection('ksiazki').getFullList({
+        expand: 'gateunek'
+      });
       setBooks(records);
     } catch (err) {
+      console.error('Błąd podczas ładowania książek:', err);
+      setError('Nie udało się załadować książek');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchGenres = async () => {
+    try {
+      const records = await pb.collection('gatunki').getFullList();
+      setGenres(records);
+    } catch (err) {
+      console.error('Błąd podczas ładowania gatunków:', err);
     }
   };
 
@@ -82,18 +99,35 @@ export default function Dashboard() {
       const records = await pb.collection('kupione').getFullList();
       setPurchases(records);
     } catch (err) {
+      console.error('Błąd podczas ładowania zakupów:', err);
     }
   };
 
   const fetchReviews = async (bookId) => {
     try {
       const records = await pb.collection('recenzje').getFullList({
-        filter: `id_book="${bookId}"`,
-        expand: 'id_user'
+        filter: `id_book="${bookId}"`
       });
-      setReviews(records);
+  
+      const userIds = [...new Set(records.map(r => r.id_user))];
+      const users = await pb.collection('users').getFullList({
+        filter: userIds.map(id => `id="${id}"`).join('||')
+      });
+  
+      const reviewsWithUsers = records.map(review => {
+        const user = users.find(u => u.id === review.id_user);
+        return {
+          ...review,
+          expand: {
+            id_user: user || null
+          }
+        };
+      });
+  
+      setReviews(reviewsWithUsers);
     } catch (err) {
-      console.error('Failed to fetch reviews:', err);
+      console.error('Błąd podczas ładowania recenzji:', err);
+      setError('Nie udało się załadować recenzji');
     }
   };
 
@@ -129,7 +163,7 @@ export default function Dashboard() {
       });
       setFavorites(records);
     } catch (err) {
-
+      console.error('Błąd podczas ładowania ulubionych:', err);
     }
   };
 
@@ -138,7 +172,7 @@ export default function Dashboard() {
   };
 
   const toggleFavorite = async (bookId, bookTitle) => {
-    if (!userEmail) return;
+    if (!user?.email) return;
     
     try {
       const existingFavorite = favorites.find(fav => fav.id_book === bookId);
@@ -148,15 +182,15 @@ export default function Dashboard() {
         setFavorites(favorites.filter(fav => fav.id !== existingFavorite.id));
       } else {
         const newFavorite = await pb.collection('polubione').create({
-          user: userEmail,
+          user: user.email,
           id_book: bookId,
           tytul: bookTitle
         });
         setFavorites([...favorites, newFavorite]);
       }
     } catch (err) {
-      console.error('Failed to toggle favorite:', err);
-      setError('Failed to update favorites');
+      console.error('Błąd podczas aktualizacji ulubionych:', err);
+      setError('Nie udało się zaktualizować ulubionych');
     }
   };
 
@@ -173,6 +207,7 @@ export default function Dashboard() {
       formData.append('nastanie', newBook.nastanie);
       formData.append('opis', newBook.opis);
       formData.append('cena', newBook.cena);
+      formData.append('gateunek', newBook.gateunek);
       if (newBook.okladka) {
         formData.append('okladka', newBook.okladka);
       }
@@ -185,13 +220,14 @@ export default function Dashboard() {
         okladka: null,
         nastanie: '',
         opis: '',
-        cena: ''
+        cena: '',
+        gateunek: ''
       });
       setBooks([...books, createdBook]);
       fetchPurchases();
     } catch (err) {
-      console.error('Failed to add book:', err);
-      setError('Failed to add book');
+      console.error('Błąd podczas dodawania książki:', err);
+      setError('Nie udało się dodać książki');
     }
   };
 
@@ -212,7 +248,8 @@ export default function Dashboard() {
       okladka: null,
       nastanie: book.nastanie,
       opis: book.opis,
-      cena: book.cena
+      cena: book.cena,
+      gateunek: book.gateunek
     });
     setEditMode(false);
     setAddStock(0);
@@ -226,7 +263,7 @@ export default function Dashboard() {
   };
 
   const handleBuy = async () => {
-    if (!selectedBook || !userEmail) return;
+    if (!selectedBook || !user?.email) return;
     
     if (selectedBook.nastanie <= 0) {
       setError('Książka niedostępna');
@@ -240,7 +277,7 @@ export default function Dashboard() {
 
     try {
       await pb.collection('kupione').create({
-        user: userEmail,
+        user: user.email,
         id_book: selectedBook.id,
         tytul: selectedBook.tytul,
         ilosc: quantity,
@@ -258,8 +295,8 @@ export default function Dashboard() {
       fetchPurchases();
       setError(null);
     } catch (err) {
-      console.error('Failed to complete purchase:', err);
-      setError('Failed to complete purchase');
+      console.error('Błąd podczas zakupu:', err);
+      setError('Nie udało się zrealizować zakupu');
     }
   };
 
@@ -273,8 +310,8 @@ export default function Dashboard() {
         setSelectedBook(null);
         fetchPurchases();
       } catch (err) {
-        console.error('Failed to delete book:', err);
-        setError('Failed to delete book');
+        console.error('Błąd podczas usuwania książki:', err);
+        setError('Nie udało się usunąć książki');
       }
     }
   };
@@ -289,6 +326,7 @@ export default function Dashboard() {
       formData.append('nastanie', editedBook.nastanie);
       formData.append('opis', editedBook.opis);
       formData.append('cena', editedBook.cena);
+      formData.append('gateunek', editedBook.gateunek);
       if (editedBook.okladka) {
         formData.append('okladka', editedBook.okladka);
       }
@@ -303,8 +341,8 @@ export default function Dashboard() {
       setEditMode(false);
       setError(null);
     } catch (err) {
-      console.error('Failed to update book:', err);
-      setError('Failed to update book');
+      console.error('Błąd podczas aktualizacji książki:', err);
+      setError('Nie udało się zaktualizować książki');
     }
   };
 
@@ -324,8 +362,8 @@ export default function Dashboard() {
       setAddStock(0);
       setError(null);
     } catch (err) {
-      console.error('Failed to add stock:', err);
-      setError('Failed to add stock');
+      console.error('Błąd podczas dodawania stanu magazynowego:', err);
+      setError('Nie udało się dodać stanu magazynowego');
     }
   };
 
@@ -338,7 +376,6 @@ export default function Dashboard() {
     }
 
     try {
-      const user = pb.authStore.model;
       await pb.collection('recenzje').create({
         id_book: selectedBook.id,
         id_user: user.id,
@@ -354,8 +391,8 @@ export default function Dashboard() {
       fetchReviews(selectedBook.id);
       setError(null);
     } catch (err) {
-      console.error('Failed to submit review:', err);
-      setError('Failed to submit review');
+      console.error('Błąd podczas dodawania recenzji:', err);
+      setError('Nie udało się dodać recenzji');
     }
   };
 
@@ -377,8 +414,8 @@ export default function Dashboard() {
       fetchReviews(selectedBook.id);
       setError(null);
     } catch (err) {
-      console.error('Failed to update review:', err);
-      setError('Failed to update review');
+      console.error('Błąd podczas aktualizacji recenzji:', err);
+      setError('Nie udało się zaktualizować recenzji');
     }
   };
 
@@ -388,8 +425,8 @@ export default function Dashboard() {
         await pb.collection('recenzje').delete(reviewId);
         fetchReviews(selectedBook.id);
       } catch (err) {
-        console.error('Failed to delete review:', err);
-        setError('Failed to delete review');
+        console.error('Błąd podczas usuwania recenzji:', err);
+        setError('Nie udało się usunąć recenzji');
       }
     }
   };
@@ -401,8 +438,8 @@ export default function Dashboard() {
       });
       fetchReviews(selectedBook.id);
     } catch (err) {
-      console.error('Failed to report review:', err);
-      setError('Failed to report review');
+      console.error('Błąd podczas zgłaszania recenzji:', err);
+      setError('Nie udało się zgłosić recenzji');
     }
   };
 
@@ -413,8 +450,8 @@ export default function Dashboard() {
       });
       fetchReviews(selectedBook.id);
     } catch (err) {
-      console.error('Failed to unreport review:', err);
-      setError('Failed to unreport review');
+      console.error('Błąd podczas cofania zgłoszenia recenzji:', err);
+      setError('Nie udało się cofnąć zgłoszenia recenzji');
     }
   };
 
@@ -435,8 +472,38 @@ export default function Dashboard() {
     );
   };
 
+  const filteredBooks = () => {
+    let result = [...books];
+    
+    // Filtrowanie po gatunku użytkownika (jeśli jest zdefiniowany)
+    if (user?.gatunek) {
+      result.sort((a, b) => {
+        if (a.gateunek === user.gatunek && b.gateunek !== user.gatunek) return -1;
+        if (a.gateunek !== user.gatunek && b.gateunek === user.gatunek) return 1;
+        return 0;
+      });
+    }
+    
+    // Filtrowanie po wyszukiwaniu
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(book => 
+        book.tytul?.toLowerCase().includes(term) || 
+        book.autor?.toLowerCase().includes(term) ||
+        book.gateunek?.toLowerCase().includes(term)
+      );
+    }
+    
+    // Filtrowanie po wybranym gatunku
+    if (selectedGenre) {
+      result = result.filter(book => book.gateunek === selectedGenre);
+    }
+    
+    return result;
+  };
+
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return <div className="min-h-screen flex items-center justify-center">Ładowanie...</div>;
   }
 
   if (error) {
@@ -448,7 +515,7 @@ export default function Dashboard() {
             onClick={fetchBooks}
             className="bg-blue-500 text-white px-4 py-2 rounded"
           >
-            Retry
+            Spróbuj ponownie
           </button>
         </div>
       </div>
@@ -533,6 +600,20 @@ export default function Dashboard() {
                       </div>
                       
                       <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">Gatunek</label>
+                        <select
+                          className="w-full p-2 border rounded"
+                          value={editedBook.gateunek}
+                          onChange={(e) => setEditedBook({...editedBook, gateunek: e.target.value})}
+                        >
+                          <option value="">Wybierz gatunek</option>
+                          {genres.map(genre => (
+                            <option key={genre.id} value={genre.nazwa}>{genre.nazwa}</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div className="mb-4">
                         <label className="block text-sm font-medium mb-1">Opis</label>
                         <textarea
                           className="w-full p-2 border rounded"
@@ -541,7 +622,7 @@ export default function Dashboard() {
                         />
                       </div>
                       
-                      <div className="grid  gap-4 mb-6">
+                      <div className="grid gap-4 mb-4">
                         <div>
                           <label className="block text-sm font-medium mb-1">Cena</label>
                           <input
@@ -552,7 +633,19 @@ export default function Dashboard() {
                             onChange={(e) => setEditedBook({...editedBook, cena: e.target.value})}
                           />
                         </div>
-                        
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">Okładka</label>
+                        <input
+                          type="file"
+                          className="w-full p-2 border rounded"
+                          onChange={handleEditFileChange}
+                          accept="image/*"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Pozostaw puste, aby zachować obecną okładkę
+                        </p>
                       </div>
                       
                       <button
@@ -564,8 +657,11 @@ export default function Dashboard() {
                     </>
                   ) : (
                     <>
-                      <h1 className="text-2xl font-bold mb-2">{selectedBook.tytul || 'Untitled'}</h1>
-                      <p className="text-gray-600 mb-4">Autor: {selectedBook.autor || 'Unknown'}</p>
+                      <h1 className="text-2xl font-bold mb-2">{selectedBook.tytul || 'Brak tytułu'}</h1>
+                      <p className="text-gray-600 mb-4">Autor: {selectedBook.autor || 'Nieznany'}</p>
+                      {selectedBook.gateunek && (
+                        <p className="text-gray-600 mb-4">Gatunek: {selectedBook.gateunek}</p>
+                      )}
                       
                       <div className="mb-4">
                         <h2 className="text-lg font-semibold mb-2">Opis</h2>
@@ -645,11 +741,11 @@ export default function Dashboard() {
 
           {/* Prawa kolumna - recenzje */}
           <div className="w-1/2 bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="p-6">
+            <div className="p-4">
               <h3 className="text-xl font-bold mb-4">Recenzje</h3>
               
               {reviews.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-4 overflow-y-auto h-[600px] display-hidden scrollbar-hide">
                   {reviews.map(review => (
                     <div 
                       key={review.id} 
@@ -707,7 +803,7 @@ export default function Dashboard() {
                           </>
                         ) : (
                           <>
-                            {review.id_user === pb.authStore.model?.id && (
+                            {review.id_user === user?.id && (
                               <>
                                 <button
                                   onClick={() => setEditingReview({
@@ -728,7 +824,7 @@ export default function Dashboard() {
                               </>
                             )}
                             
-                            {(isAdmin() || userRole === 'sadmin') && review.id_user !== pb.authStore.model?.id && (
+                            {(isAdmin() || user?.rola === 'sadmin') && review.id_user !== user?.id && (
                               <button
                                 onClick={() => handleDeleteReview(review.id)}
                                 className="text-sm bg-red-500 text-white px-2 py-1 rounded"
@@ -738,8 +834,8 @@ export default function Dashboard() {
                             )}
                             
                             {!isAdmin() && 
-                             userRole !== 'sadmin' && 
-                             review.id_user !== pb.authStore.model?.id && (
+                             user?.rola !== 'sadmin' && 
+                             review.id_user !== user?.id && (
                               <button
                                 onClick={() => review.report ? 
                                   handleUnreportReview(review.id) : 
@@ -754,7 +850,7 @@ export default function Dashboard() {
                               </button>
                             )}
                             
-                            {(isAdmin() || userRole === 'sadmin') && review.report && (
+                            {(isAdmin() || user?.rola === 'sadmin') && review.report && (
                               <button
                                 onClick={() => handleUnreportReview(review.id)}
                                 className="text-sm bg-green-500 text-white px-2 py-1 rounded"
@@ -809,20 +905,49 @@ export default function Dashboard() {
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-2xl font-bold">BookSpace</h1>
             <div className="flex items-center gap-4">
-              {userEmail && (
+              {user && (
                 <span 
                   onClick={() => router.push('/profil')} 
                   className="cursor-pointer hover:underline"
                 >
-                  {userEmail}
+                  {user.email}
                 </span>
               )}
               <button 
                 onClick={handleLogout}
                 className="bg-red-500 text-white px-4 py-2 rounded"
               >
-                Logout
+                Wyloguj
               </button>
+            </div>
+          </div>
+
+          {/* Wyszukiwarka i filtry */}
+          <div className="mb-6 bg-white p-4 rounded-lg shadow-md">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-1">Wyszukaj książki</label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded"
+                  placeholder="Wpisz tytuł, autora lub gatunek..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-1">Filtruj po gatunku</label>
+                <select
+                  className="w-full p-2 border rounded"
+                  value={selectedGenre}
+                  onChange={(e) => setSelectedGenre(e.target.value)}
+                >
+                  <option value="">Wszystkie gatunki</option>
+                  {genres.map(genre => (
+                    <option key={genre.id} value={genre.nazwa}>{genre.nazwa}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -847,14 +972,20 @@ export default function Dashboard() {
                                 className="h-full w-full object-cover"
                               />
                               <div className="absolute inset-0 bg-black bg-opacity-30 flex flex-col justify-end p-4">
-                                <h2 className="text-white font-semibold text-lg truncate">{book.tytul || 'Untitled'}</h2>
-                                <p className="text-gray-200 text-sm truncate">Autor: {book.autor || 'Unknown'}</p>
+                                <h2 className="text-white font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
+                                <p className="text-gray-200 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
+                                {book.gateunek && (
+                                  <p className="text-gray-200 text-xs truncate">Gatunek: {book.gateunek}</p>
+                                )}
                               </div>
                             </div>
                           ) : (
                             <div className="h-full w-full bg-gray-200 flex flex-col justify-end p-4">
-                              <h2 className="text-gray-800 font-semibold text-lg truncate">{book.tytul || 'Untitled'}</h2>
-                              <p className="text-gray-600 text-sm truncate">Autor: {book.autor || 'Unknown'}</p>
+                              <h2 className="text-gray-800 font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
+                              <p className="text-gray-600 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
+                              {book.gateunek && (
+                                <p className="text-gray-600 text-xs truncate">Gatunek: {book.gateunek}</p>
+                              )}
                             </div>
                           )}
                           <button 
@@ -885,7 +1016,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            {books.map((book) => (
+            {filteredBooks().map((book) => (
               <div 
                 key={book.id} 
                 className="flex-shrink-0 w-64 h-80 relative cursor-pointer"
@@ -900,14 +1031,20 @@ export default function Dashboard() {
                         className="h-full w-full object-cover"
                       />
                       <div className="absolute inset-0 bg-black bg-opacity-30 flex flex-col justify-end p-4">
-                        <h2 className="text-white font-semibold text-lg truncate">{book.tytul || 'Untitled'}</h2>
-                        <p className="text-gray-200 text-sm truncate">Autor: {book.autor || 'Unknown'}</p>
+                        <h2 className="text-white font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
+                        <p className="text-gray-200 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
+                        {book.gateunek && (
+                          <p className="text-gray-200 text-xs truncate">Gatunek: {book.gateunek}</p>
+                        )}
                       </div>
                     </div>
                   ) : (
                     <div className="h-full w-full bg-gray-200 flex flex-col justify-end p-4">
-                      <h2 className="text-gray-800 font-semibold text-lg truncate">{book.tytul || 'Untitled'}</h2>
-                      <p className="text-gray-600 text-sm truncate">Autor: {book.autor || 'Unknown'}</p>
+                      <h2 className="text-gray-800 font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
+                      <p className="text-gray-600 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
+                      {book.gateunek && (
+                        <p className="text-gray-600 text-xs truncate">Gatunek: {book.gateunek}</p>
+                      )}
                     </div>
                   )}
                   <button 
@@ -927,11 +1064,11 @@ export default function Dashboard() {
           {showAddForm && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-                <h2 className="text-xl font-bold mb-4">Add New Book</h2>
+                <h2 className="text-xl font-bold mb-4">Dodaj nową książkę</h2>
                 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Title</label>
+                    <label className="block text-sm font-medium mb-1">Tytuł</label>
                     <input
                       type="text"
                       className="w-full p-2 border rounded"
@@ -941,7 +1078,7 @@ export default function Dashboard() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-1">Author</label>
+                    <label className="block text-sm font-medium mb-1">Autor</label>
                     <input
                       type="text"
                       className="w-full p-2 border rounded"
@@ -951,7 +1088,21 @@ export default function Dashboard() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-1">Initial Stock</label>
+                    <label className="block text-sm font-medium mb-1">Gatunek</label>
+                    <select
+                      className="w-full p-2 border rounded"
+                      value={newBook.gateunek}
+                      onChange={(e) => setNewBook({...newBook, gateunek: e.target.value})}
+                    >
+                      <option value="">Wybierz gatunek</option>
+                      {genres.map(genre => (
+                        <option key={genre.id} value={genre.nazwa}>{genre.nazwa}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Początkowy stan magazynowy</label>
                     <input
                       type="number"
                       className="w-full p-2 border rounded"
@@ -961,7 +1112,7 @@ export default function Dashboard() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-1">Price</label>
+                    <label className="block text-sm font-medium mb-1">Cena</label>
                     <input
                       type="number"
                       step="0.01"
@@ -972,7 +1123,7 @@ export default function Dashboard() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-1">Description</label>
+                    <label className="block text-sm font-medium mb-1">Opis</label>
                     <textarea
                       className="w-full p-2 border rounded"
                       value={newBook.opis}
@@ -981,7 +1132,7 @@ export default function Dashboard() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-1">Cover Image</label>
+                    <label className="block text-sm font-medium mb-1">Okładka</label>
                     <input
                       type="file"
                       className="w-full p-2 border rounded"
@@ -996,13 +1147,13 @@ export default function Dashboard() {
                     onClick={() => setShowAddForm(false)}
                     className="px-4 py-2 border rounded hover:bg-gray-100"
                   >
-                    Cancel
+                    Anuluj
                   </button>
                   <button
                     onClick={handleAddBook}
                     className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
                   >
-                    Add Book
+                    Dodaj książkę
                   </button>
                 </div>
               </div>

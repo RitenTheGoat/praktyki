@@ -82,8 +82,7 @@ export default function Dashboard() {
       });
       setBooks(records);
     } catch (err) {
-      console.error('Błąd podczas ładowania książek:', err);
-      setError('Nie udało się załadować książek');
+
     } finally {
       setLoading(false);
     }
@@ -94,7 +93,6 @@ export default function Dashboard() {
       const records = await pb.collection('gatunki').getFullList();
       setGenres(records);
     } catch (err) {
-      console.error('Błąd podczas ładowania gatunków:', err);
     }
   };
 
@@ -103,7 +101,6 @@ export default function Dashboard() {
       const records = await pb.collection('kupione').getFullList();
       setPurchases(records);
     } catch (err) {
-      console.error('Błąd podczas ładowania zakupów:', err);
     }
   };
 
@@ -167,7 +164,6 @@ export default function Dashboard() {
       });
       setFavorites(records);
     } catch (err) {
-      console.error('Błąd podczas ładowania ulubionych:', err);
     }
   };
 
@@ -995,12 +991,7 @@ export default function Dashboard() {
                   {user.email}
                 </span>
               )}
-              <button 
-                onClick={handleLogout}
-                className="bg-red-500 text-white px-4 py-2 rounded"
-              >
-                Wyloguj
-              </button>
+             
             </div>
           </div>
 

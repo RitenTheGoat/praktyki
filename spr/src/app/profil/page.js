@@ -162,7 +162,6 @@ export default function ProfilePage() {
       setLoading(true);
       const purchases = await pb.collection('kupione').getFullList({
         filter: `user = "${userData.email}"`,
-        sort: '-created'
       });
   
       const bookIds = purchases.map(p => p.id_book).filter(Boolean);
@@ -196,7 +195,6 @@ export default function ProfilePage() {
     try {
       setLoading(true);
       const result = await pb.collection('users').getFullList({
-        sort: '-created',
         $autoCancel: false
       });
       setUsersList(result);
@@ -207,9 +205,7 @@ export default function ProfilePage() {
       setShowReportedComments(false);
       setLoading(false);
     } catch (err) {
-      console.error('Błąd pobierania użytkowników:', err);
-      setError('Nie udało się załadować listy użytkowników');
-      setLoading(false);
+
     }
   };
 

@@ -1094,8 +1094,9 @@ export default function Dashboard() {
               </div>
             </div>
           )}
-
-          <div className="flex flex-wrap gap-6">
+            <h1 className="text-2xl font-bold">Książki polecane dla Ciebie</h1>
+            <div className="flex flex-wrap gap-6">
+            
             {isAdmin() && (
               <div 
                 className="bg-white rounded-lg shadow-md overflow-hidden flex items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors h-80 w-64"

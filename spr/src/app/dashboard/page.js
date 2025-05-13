@@ -82,7 +82,7 @@ export default function Dashboard() {
       });
       setBooks(records);
     } catch (err) {
-
+   
     } finally {
       setLoading(false);
     }
@@ -127,8 +127,7 @@ export default function Dashboard() {
   
       setReviews(reviewsWithUsers);
     } catch (err) {
-      console.error('Błąd podczas ładowania recenzji:', err);
-      setError('Nie udało się załadować recenzji');
+
     }
   };
 
@@ -295,6 +294,7 @@ export default function Dashboard() {
       fetchPurchases();
       setError(null);
       
+      // Pokazanie powiadomienia o zakupie
       setPurchasedBookTitle(selectedBook.tytul);
       setShowPurchaseNotification(true);
     } catch (err) {
@@ -379,7 +379,7 @@ export default function Dashboard() {
       });
       
       setGenres([...genres, newGenre]);
-      setEditedBook({...editedBook, gateunek: newGenre.id});
+      setEditedBook({...editedBook, gateunek: newGenre.nazwa});
       setNewGenreName('');
       setShowAddGenreForm(false);
     } catch (err) {
@@ -496,6 +496,7 @@ export default function Dashboard() {
   const filteredBooks = () => {
     let result = [...books];
     
+    // Filtrowanie po gatunku użytkownika (jeśli jest zdefiniowany)
     if (user?.gatunek) {
       result.sort((a, b) => {
         if (a.gateunek === user.gatunek && b.gateunek !== user.gatunek) return -1;
@@ -504,6 +505,7 @@ export default function Dashboard() {
       });
     }
     
+    // Filtrowanie po wyszukiwaniu
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(book => 
@@ -513,6 +515,7 @@ export default function Dashboard() {
       );
     }
     
+    // Filtrowanie po wybranym gatunku
     if (selectedGenre) {
       result = result.filter(book => book.gateunek === selectedGenre);
     }
@@ -542,6 +545,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
+      {/* Powiadomienie o zakupie */}
       {showPurchaseNotification && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md animate-fade-in">
@@ -569,6 +573,7 @@ export default function Dashboard() {
 
       {selectedBook ? (
         <div className="max-w-6xl mx-auto flex gap-6">
+          {/* Lewa kolumna - książka */}
           <div className="w-1/2 bg-white rounded-lg shadow-md overflow-hidden">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
@@ -651,7 +656,7 @@ export default function Dashboard() {
                           >
                             <option value="">Wybierz gatunek</option>
                             {genres.map(genre => (
-                              <option key={genre.id} value={genre.id}>{genre.nazwa}</option>
+                              <option key={genre.id} value={genre.nazwa}>{genre.nazwa}</option>
                             ))}
                           </select>
                           <button
@@ -739,7 +744,7 @@ export default function Dashboard() {
                       <h1 className="text-2xl font-bold mb-2">{selectedBook.tytul || 'Brak tytułu'}</h1>
                       <p className="text-gray-600 mb-4">Autor: {selectedBook.autor || 'Nieznany'}</p>
                       {selectedBook.gateunek && (
-                        <p className="text-gray-600 mb-4">Gatunek: {genres.find(g => g.id === selectedBook.gateunek)?.nazwa || selectedBook.gateunek}</p>
+                        <p className="text-gray-600 mb-4">Gatunek: {selectedBook.gateunek}</p>
                       )}
                       
                       <div className="mb-4">
@@ -818,6 +823,7 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Prawa kolumna - recenzje */}
           <div className="w-1/2 bg-white rounded-lg shadow-md overflow-hidden">
             <div className="p-4">
               <h3 className="text-xl font-bold mb-4">Recenzje</h3>
@@ -991,10 +997,16 @@ export default function Dashboard() {
                   {user.email}
                 </span>
               )}
-             
+              <button 
+                onClick={handleLogout}
+                className="bg-red-500 text-white px-4 py-2 rounded"
+              >
+                Wyloguj
+              </button>
             </div>
           </div>
 
+          {/* Wyszukiwarka i filtry */}
           <div className="mb-6 bg-white p-6 rounded-lg shadow-md">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
@@ -1027,7 +1039,7 @@ export default function Dashboard() {
                   >
                     <option value="">Wszystkie gatunki</option>
                     {genres.map(genre => (
-                      <option key={genre.id} value={genre.id}>{genre.nazwa}</option>
+                      <option key={genre.id} value={genre.nazwa}>{genre.nazwa}</option>
                     ))}
                   </select>
                   <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
@@ -1064,7 +1076,7 @@ export default function Dashboard() {
                                 <h2 className="text-white font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
                                 <p className="text-gray-200 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
                                 {book.gateunek && (
-                                  <p className="text-gray-200 text-xs truncate">Gatunek: {genres.find(g => g.id === book.gateunek)?.nazwa || book.gateunek}</p>
+                                  <p className="text-gray-200 text-xs truncate">Gatunek: {book.gateunek}</p>
                                 )}
                               </div>
                             </div>
@@ -1073,7 +1085,7 @@ export default function Dashboard() {
                               <h2 className="text-gray-800 font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
                               <p className="text-gray-600 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
                               {book.gateunek && (
-                                <p className="text-gray-600 text-xs truncate">Gatunek: {genres.find(g => g.id === book.gateunek)?.nazwa || book.gateunek}</p>
+                                <p className="text-gray-600 text-xs truncate">Gatunek: {book.gateunek}</p>
                               )}
                             </div>
                           )}
@@ -1094,9 +1106,8 @@ export default function Dashboard() {
               </div>
             </div>
           )}
-            <h1 className="text-2xl font-bold">Książki polecane dla Ciebie</h1>
-            <div className="flex flex-wrap gap-6">
-            
+
+          <div className="flex flex-wrap gap-6">
             {isAdmin() && (
               <div 
                 className="bg-white rounded-lg shadow-md overflow-hidden flex items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors h-80 w-64"
@@ -1124,7 +1135,7 @@ export default function Dashboard() {
                         <h2 className="text-white font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
                         <p className="text-gray-200 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
                         {book.gateunek && (
-                          <p className="text-gray-200 text-xs truncate">Gatunek: {genres.find(g => g.id === book.gateunek)?.nazwa || book.gateunek}</p>
+                          <p className="text-gray-200 text-xs truncate">Gatunek: {book.gateunek}</p>
                         )}
                       </div>
                     </div>
@@ -1133,7 +1144,7 @@ export default function Dashboard() {
                       <h2 className="text-gray-800 font-semibold text-lg truncate">{book.tytul || 'Brak tytułu'}</h2>
                       <p className="text-gray-600 text-sm truncate">Autor: {book.autor || 'Nieznany'}</p>
                       {book.gateunek && (
-                        <p className="text-gray-600 text-xs truncate">Gatunek: {genres.find(g => g.id === book.gateunek)?.nazwa || book.gateunek}</p>
+                        <p className="text-gray-600 text-xs truncate">Gatunek: {book.gateunek}</p>
                       )}
                     </div>
                   )}
@@ -1186,7 +1197,7 @@ export default function Dashboard() {
                     >
                       <option value="">Wybierz gatunek</option>
                       {genres.map(genre => (
-                        <option key={genre.id} value={genre.id}>{genre.nazwa}</option>
+                        <option key={genre.id} value={genre.nazwa}>{genre.nazwa}</option>
                       ))}
                     </select>
                   </div>
